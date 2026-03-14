@@ -1,13 +1,17 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
 
-const TransactionSchema = new Schema({
-  book: { type: Schema.Types.ObjectId, ref: 'Book', required: true },
-  membership: { type: Schema.Types.ObjectId, ref: 'Membership', required: true },
-  issue_date: { type: Date, required: true },
-  expected_return_date: { type: Date, required: true },
-  actual_return_date: { type: Date },
-  fine: { type: Number, default: 0 }
-});
+const transactionSchema = new mongoose.Schema(
+  {
+    bookId: { type: mongoose.Schema.Types.ObjectId, ref: 'Book', required: true },
+    memberId: { type: mongoose.Schema.Types.ObjectId, ref: 'Membership', required: true },
+    issueDate: { type: Date, required: true },
+    returnDate: { type: Date, required: true },
+    actualReturnDate: { type: Date, default: null },
+    fineAmount: { type: Number, default: 0 },
+    finePaid: { type: Boolean, default: false },
+    remarks: { type: String, default: '' }
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Transaction', TransactionSchema);
+module.exports = mongoose.model('Transaction', transactionSchema);

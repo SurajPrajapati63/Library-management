@@ -1,30 +1,70 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 
-export default function ReturnBook(){
-  const [transaction_id,setTransaction]=useState('');
-  const [return_date,setReturn]=useState(new Date().toISOString().slice(0,10));
-  const [error,setError]=useState('');
-  
-  async function submit(e){
+export default function ReturnBook() {
+  const nav = useNavigate();
+  const [transactions, setTransactions] = useState([]);
+  const [transactionId, setTransactionId] = useState('');
+  const [returnDate, setReturnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get('/api/transactions/open')
+      .then((res) => setTransactions(res.data || []))
+      .catch((err) => setError(err.response?.data?.error || 'Unable to load active issues'));
+  }, []);
+
+  const selectedTransaction = transactions.find((transaction) => transaction._id === transactionId);
+
+  async function submit(e) {
     e.preventDefault();
-    if(!transaction_id||!return_date){ setError('Missing fields'); return; }
-    try{
-      const token = localStorage.getItem('token');
-      const res = await axios.post('/api/transactions/return',{transaction_id,actual_return_date:return_date},{headers:{Authorization:'Bearer '+token}});
-      const data = res.data || res;
-      // redirect to pay fine
-      window.location = '/transactions/payfine?payment_id=' + data.payment_id;
-    }catch(err){ setError(err.response?.data?.error || 'Error'); }
+    setError('');
+
+    if (!transactionId || !returnDate) {
+      setError('Missing fields');
+      return;
+    }
+
+    try {
+      const res = await api.post('/api/transactions/return', {
+        transactionId,
+        actualReturnDate: returnDate
+      });
+      nav(`/transactions/payfine?transactionId=${res.data._id}`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error');
+    }
   }
 
   return (
     <div>
       <h2>Return Book</h2>
       <form onSubmit={submit}>
-        <div><input value={transaction_id} onChange={e=>setTransaction(e.target.value)} placeholder="Transaction ID"/></div>
-        <div><input type="date" value={return_date} onChange={e=>setReturn(e.target.value)} /></div>
-        <div style={{color:'red'}}>{error}</div>
+        <div>
+          <select value={transactionId} onChange={(e) => setTransactionId(e.target.value)}>
+            <option value="">Select issued item</option>
+            {transactions.map((transaction) => (
+              <option key={transaction._id} value={transaction._id}>
+                {transaction.bookId?.title || 'Unknown book'} - {transaction.memberId?.memberName || 'Unknown member'}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedTransaction && (
+          <section>
+            <div className="info-grid">
+              <div><strong>Book Name:</strong> {selectedTransaction.bookId?.title}</div>
+              <div><strong>Author Name:</strong> {selectedTransaction.bookId?.author}</div>
+              <div><strong>Serial Number:</strong> {selectedTransaction.bookId?.serialNumber}</div>
+              <div><strong>Issue Date:</strong> {new Date(selectedTransaction.issueDate).toLocaleDateString()}</div>
+            </div>
+          </section>
+        )}
+
+        <div><input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} /></div>
+        <div className="form-message form-message--error">{error}</div>
         <div><button>Return</button></div>
       </form>
     </div>

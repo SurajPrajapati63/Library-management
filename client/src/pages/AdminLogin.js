@@ -1,29 +1,42 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { login } from '../services/authService';
 
-export default function AdminLogin(){
-  const [name,setName]=useState('');
-  const [password,setPassword]=useState('');
-  const [error,setError]=useState('');
+export default function AdminLogin() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const nav = useNavigate();
-  async function submit(e){
+
+  async function submit(e) {
     e.preventDefault();
-    try{
-      const res = await axios.post('/api/auth/login',{name,password});
+    setError('');
+
+    try {
+      const res = await login({ email, password });
+      if (res.data.role !== 'admin') {
+        setError('Admin account required.');
+        return;
+      }
+
       localStorage.setItem('token', res.data.token);
-      if(res.data.role==='admin') nav('/admin-home'); else nav('/user-home');
-    }catch(err){ setError(err.response?.data?.error || 'Login failed'); }
+      localStorage.setItem('role', res.data.role);
+      nav('/admin-home');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Login failed');
+    }
   }
+
   return (
     <div>
       <h2>Admin Login</h2>
       <form onSubmit={submit}>
-        <div><input value={name} onChange={e=>setName(e.target.value)} placeholder="Name"/></div>
-        <div><input value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password" type="password"/></div>
+        <div><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" type="email" /></div>
+        <div><input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" type="password" /></div>
         <div><button>Login</button></div>
-        <div style={{color:'red'}}>{error}</div>
+        <div className="form-message form-message--error">{error}</div>
       </form>
+      <p><Link to="/user-login">User login</Link></p>
     </div>
   );
 }

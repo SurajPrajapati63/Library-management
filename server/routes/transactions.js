@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, maintenanceExists } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 const { calculateFine } = require('../utils/fine');
 const Book = require('../models/Book');
 const Transaction = require('../models/Transaction');
@@ -9,8 +9,46 @@ const FinePayment = require('../models/FinePayment');
 
 router.use(authMiddleware);
 
+router.get('/memberships', async (req, res) => {
+  try {
+    const rows = await Membership.find({ status: 'active' }).sort({ name: 1 }).lean();
+    return res.json(rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'DB error' });
+  }
+});
+
+router.get('/active-issues', async (req, res) => {
+  try {
+    const rows = await Transaction.find({ actual_return_date: null })
+      .populate('book')
+      .populate('membership')
+      .sort({ issue_date: -1 })
+      .lean();
+    return res.json(rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'DB error' });
+  }
+});
+
+router.get('/payments/:id', async (req, res) => {
+  try {
+    const payment = await FinePayment.findById(req.params.id).populate({
+      path: 'transaction',
+      populate: [{ path: 'book' }, { path: 'membership' }]
+    }).lean();
+    if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    return res.json(payment);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'DB error' });
+  }
+});
+
 // Book Available (search) - at least one of title or author
-router.get('/books/search', maintenanceExists, async (req, res) => {
+router.get('/books/search', async (req, res) => {
   const { title, author } = req.query;
   if (!title && !author) return res.status(400).json({ error: 'Enter book name or select author' });
   try {
@@ -36,8 +74,8 @@ router.get('/books/authors', async (req, res) => {
 });
 
 // Issue book
-router.post('/issue', maintenanceExists, async (req, res) => {
-  const { book_id, membership_id, issue_date, return_date, remarks } = req.body;
+router.post('/issue', async (req, res) => {
+  const { book_id, membership_id, issue_date, return_date } = req.body;
   if (!book_id || !membership_id || !issue_date || !return_date) return res.status(400).json({ error: 'Missing fields' });
   try {
     const issue = new Date(issue_date);
@@ -47,13 +85,21 @@ router.post('/issue', maintenanceExists, async (req, res) => {
     const maxReturn = new Date(issue);
     maxReturn.setDate(maxReturn.getDate() + 15);
     const ret = new Date(return_date);
+    if (ret < issue) return res.status(400).json({ error: 'Return date cannot be earlier than issue date' });
     if (ret > maxReturn) return res.status(400).json({ error: 'Return date cannot be later than 15 days from issue' });
 
     const book = await Book.findById(book_id);
     if (!book) return res.status(404).json({ error: 'Book not found' });
     if (book.available_count <= 0) return res.status(400).json({ error: 'Book not available' });
 
-    const tx = new Transaction({ book: book._id, membership: membership_id, issue_date: issue, expected_return_date: ret });
+    const membership = await Membership.findById(membership_id);
+    if (!membership) return res.status(404).json({ error: 'Membership not found' });
+    if (membership.status !== 'active') return res.status(400).json({ error: 'Membership is not active' });
+    if (membership.expiry && new Date(membership.expiry) < today) {
+      return res.status(400).json({ error: 'Membership has expired' });
+    }
+
+    const tx = new Transaction({ book: book._id, membership: membership._id, issue_date: issue, expected_return_date: ret });
     await tx.save();
     book.available_count = book.available_count - 1;
     await book.save();
@@ -65,13 +111,23 @@ router.post('/issue', maintenanceExists, async (req, res) => {
 });
 
 // Return book: create actual_return_date and route to pay fine
-router.post('/return', maintenanceExists, async (req, res) => {
+router.post('/return', async (req, res) => {
   const { transaction_id, actual_return_date } = req.body;
   if (!transaction_id || !actual_return_date) return res.status(400).json({ error: 'Missing fields' });
   try {
     const tx = await Transaction.findById(transaction_id).populate('book');
     if (!tx) return res.status(404).json({ error: 'Transaction not found' });
-    tx.actual_return_date = new Date(actual_return_date);
+
+    if (tx.actual_return_date) {
+      return res.status(400).json({ error: 'Book has already been returned' });
+    }
+
+    const actualReturn = new Date(actual_return_date);
+    if (actualReturn < tx.issue_date) {
+      return res.status(400).json({ error: 'Return date cannot be earlier than issue date' });
+    }
+
+    tx.actual_return_date = actualReturn;
     const fine = calculateFine(tx.expected_return_date, tx.actual_return_date);
     tx.fine = fine;
     await tx.save();
@@ -79,7 +135,13 @@ router.post('/return', maintenanceExists, async (req, res) => {
     const book = tx.book;
     book.available_count = (book.available_count || 0) + 1;
     await book.save();
-    const payment = new FinePayment({ transaction: tx._id, fine_amount: fine, paid: false });
+    let payment = await FinePayment.findOne({ transaction: tx._id });
+    if (!payment) {
+      payment = new FinePayment({ transaction: tx._id, fine_amount: fine, paid: fine === 0 });
+    } else {
+      payment.fine_amount = fine;
+      payment.paid = fine === 0 ? true : payment.paid;
+    }
     await payment.save();
     return res.json({ ok: true, fine, payment_id: payment._id });
   } catch (err) {

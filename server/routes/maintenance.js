@@ -82,12 +82,26 @@ router.put('/books/:id', async (req, res) => {
 
 // User Management: create or fetch
 router.post('/users', async (req, res) => {
-  const { name, password, role } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name required' });
+  const { name, email, password, role } = req.body;
+  const normalizedName = String(name || '').trim();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+
+  if (!normalizedName || !normalizedEmail) {
+    return res.status(400).json({ error: 'Name and email are required' });
+  }
+
   try {
     const bcrypt = require('bcrypt');
     const hashed = await bcrypt.hash(password || 'password', 10);
-    const u = new User({ name, password: hashed, role: role || 'user' });
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) return res.status(409).json({ error: 'User already exists' });
+
+    const u = new User({
+      name: normalizedName,
+      email: normalizedEmail,
+      password: hashed,
+      role: role || 'user'
+    });
     await u.save();
     return res.json({ ok: true });
   } catch (err) {

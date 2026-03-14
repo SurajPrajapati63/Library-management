@@ -1,12 +1,15 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
 
-const BookSchema = new Schema({
-  title: { type: String, required: true },
-  author: { type: String, required: true },
-  type: { type: String, enum: ['book','movie'], default: 'book' },
-  serial_no: { type: String, required: true },
-  available_count: { type: Number, default: 0 }
-});
+const bookSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    author: { type: String, required: true, trim: true },
+    category: { type: String, required: true, trim: true },
+    serialNumber: { type: String, required: true, unique: true, trim: true },
+    available: { type: Boolean, default: true },
+    mediaType: { type: String, enum: ['book', 'movie'], default: 'book' }
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Book', BookSchema);
+module.exports = mongoose.model('Book', bookSchema);

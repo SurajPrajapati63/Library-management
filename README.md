@@ -6,9 +6,10 @@ Frontend: React (client)
 
 Setup:
 
-1. Run MongoDB locally or provide a `MONGO_URI` in `server/.env` (or `DB_URI`).
-2. Copy `.env.example` to `.env` and set `MONGO_URI`, `JWT_SECRET`, and `PORT`.
-3. Install server dependencies and start the server:
+1. Copy `server/.env.example` to `server/.env`.
+2. Set `MONGO_URI`, `JWT_SECRET`, and `PORT` in `server/.env`.
+3. Start MongoDB locally on `127.0.0.1:27017`, or replace `MONGO_URI` with your MongoDB Atlas/remote connection string.
+4. Install server dependencies and start the server:
 
 ```powershell
 cd server
@@ -16,7 +17,7 @@ npm install
 npm start
 ```
 
-4. Install client dependencies and run React client in development (optional):
+5. Install client dependencies and run React client in development (optional):
 
 ```powershell
 cd client
@@ -24,7 +25,7 @@ npm install
 npm start
 ```
 
-5. Build the React client for production and serve via the server:
+6. Build the React client for production and serve via the server:
 
 ```powershell
 cd client

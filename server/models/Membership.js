@@ -1,14 +1,17 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
 
-const MembershipSchema = new Schema({
-  name: { type: String, required: true },
-  address: { type: String },
-  contact: { type: String, required: true },
-  email: { type: String, required: true },
-  duration: { type: String, required: true },
-  expiry: { type: Date },
-  status: { type: String, default: 'active' }
-});
+const membershipSchema = new mongoose.Schema(
+  {
+    membershipNumber: { type: String, required: true, unique: true, trim: true },
+    memberName: { type: String, required: true, trim: true },
+    address: { type: String, required: true, trim: true },
+    phone: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
+    membershipStartDate: { type: Date, required: true },
+    membershipEndDate: { type: Date, required: true },
+    cancelled: { type: Boolean, default: false }
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Membership', MembershipSchema);
+module.exports = mongoose.model('Membership', membershipSchema);
